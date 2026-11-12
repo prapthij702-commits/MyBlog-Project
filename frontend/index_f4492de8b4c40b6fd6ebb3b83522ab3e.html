@@ -1,0 +1,96 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <!-- Based on the static safety-net CSP in vendored/web-previewer/index.html.
+         The explicit frame-src origins support Mac's osf:// offline mapping. -->
+    <meta
+        http-equiv="Content-Security-Policy"
+        content="default-src 'self'; style-src 'self' 'unsafe-inline'; form-action 'none'; frame-src 'self' https://fa000000210.mro1cdnstorage.public.onecdn.static.microsoft osf://fa000000210.mro1cdnstorage.public.onecdn.static.microsoft https://fa000000210.resources.office.net osf://fa000000210.resources.office.net https://fa000000210.mro1cdnstorage.public.cdn.office.net osf://fa000000210.mro1cdnstorage.public.cdn.office.net; child-src 'none'; img-src 'self' data:; media-src 'self' data:; script-src 'self' https://officeapis.public.onecdn.static.microsoft https://fa000000210.mro1cdnstorage.public.onecdn.static.microsoft osf://fa000000210.mro1cdnstorage.public.onecdn.static.microsoft https://fa000000210.resources.office.net osf://fa000000210.resources.office.net https://fa000000210.mro1cdnstorage.public.cdn.office.net osf://fa000000210.mro1cdnstorage.public.cdn.office.net 'unsafe-inline' 'unsafe-eval'; worker-src 'none'; object-src 'self' data:; connect-src 'none'; font-src 'self' 'unsafe-inline'; base-uri 'self'; manifest-src 'none'; prefetch-src 'none';"
+    />
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Copilot Content Block</title>
+
+    <script src="https://officeapis.public.onecdn.static.microsoft/1/office.js"></script>
+    <script src="index.js" defer></script>
+
+    <style>
+        html, body {
+            margin: 0;
+            padding: 0;
+            height: 100%;
+            overflow: hidden;
+            background: #ffffff;
+        }
+
+        #content {
+            height: 100%;
+            width: 100%;
+        }
+
+        #content iframe {
+            display: block;
+            width: 100%;
+            height: 100%;
+            border: 0;
+        }
+
+        #unsupported-platform {
+            min-height: 100%;
+            background: #ffffff;
+            color: #323130;
+            font: 14px/1.4 "Segoe UI", sans-serif;
+            text-align: left;
+        }
+
+        #unsupported-platform[hidden] {
+            display: none;
+        }
+
+        .unsupported-platform-banner {
+            box-sizing: border-box;
+            display: grid;
+            grid-template-columns: 20px 1fr;
+            column-gap: 10px;
+            width: 100%;
+            padding: 6px 8px 8px;
+            background: #fff4ce;
+        }
+
+        .unsupported-platform-icon {
+            display: block;
+            width: 20px;
+            height: 20px;
+        }
+
+        .unsupported-platform-title {
+            font-weight: 600;
+            line-height: 20px;
+        }
+
+        .unsupported-platform-message {
+            grid-column: 2;
+            margin: 2px 0 0;
+        }
+    </style>
+</head>
+<body>
+    <div id="content"></div>
+    <div id="unsupported-platform" role="alert" hidden>
+        <div class="unsupported-platform-banner">
+            <svg class="unsupported-platform-icon" viewBox="0 0 20 20" aria-hidden="true" focusable="false">
+                <circle cx="10" cy="10" r="8.5" fill="#ffffff" stroke="#ff4d4f" stroke-width="1.5" />
+                <path
+                    d="M6.75 6.75 L13.25 13.25 M13.25 6.75 L6.75 13.25"
+                    fill="none"
+                    stroke="#ff4d4f"
+                    stroke-width="1.75"
+                    stroke-linecap="round"
+                />
+            </svg>
+            <span class="unsupported-platform-title">ERROR</span>
+            <p class="unsupported-platform-message">This feature is not supported.</p>
+        </div>
+    </div>
+</body>
+</html>
