@@ -165,6 +165,11 @@
                 const paragraph = document.createElement("p");
                 paragraph.innerText = blog.content;
 
+                // Read More link
+                const readMore = document.createElement("a");
+                readMore.innerText = "Read More";
+                readMore.href = "blog-details.html?id=" + blog.id;
+
                 // Edit button
                 const editButton = document.createElement("button");
                 editButton.innerText = "Edit";
@@ -181,10 +186,13 @@
 
                 blogItem.appendChild(heading);
                 blogItem.appendChild(paragraph);
+                blogItem.appendChild(readMore);
+                blogItem.appendChild(document.createElement("br"));
                 blogItem.appendChild(editButton);
                 blogItem.appendChild(deleteButton);
 
                 blogList.appendChild(blogItem);
+                blogList.appendChild(document.createElement("hr"));
             });
 
             if (blogs.length === 0) {

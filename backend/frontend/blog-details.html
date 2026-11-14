@@ -1,0 +1,68 @@
+
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Blog Details</title>
+</head>
+<body>
+
+    <h1>Blog Details</h1>
+
+    <div id="blogDetails">
+        Loading blog...
+    </div>
+
+    <br>
+
+    <a href="index.html">Back to Home</a>
+
+    <script>
+        async function loadBlogDetails() {
+
+            const params = new URLSearchParams(window.location.search);
+            const blogId = params.get("id");
+
+            const details = document.getElementById("blogDetails");
+
+            if (!blogId) {
+                details.innerText = "Blog ID not found.";
+                return;
+            }
+
+            try {
+                const response = await fetch("http://localhost:5000/api/blogs");
+
+                const blogs = await response.json();
+
+                const blog = blogs.find(
+                    item => String(item.id) === blogId
+                );
+
+                if (!blog) {
+                    details.innerText = "Blog not found.";
+                    return;
+                }
+
+                const title = document.createElement("h2");
+                title.innerText = blog.title;
+
+                const content = document.createElement("p");
+                content.innerText = blog.content;
+
+                details.innerHTML = "";
+
+                details.appendChild(title);
+                details.appendChild(content);
+
+            } catch (error) {
+
+                details.innerText = "Unable to load blog details.";
+
+            }
+        }
+
+        loadBlogDetails();
+    </script>
+
+</body>
+</html>
