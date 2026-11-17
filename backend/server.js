@@ -5,6 +5,7 @@ const express = require('express');
 const cors = require('cors');
 const bcrypt = require('bcryptjs');
 const mysql = require('mysql2/promise');
+const jwt = require('jsonwebtoken');
 
 const app = express();
 
@@ -17,10 +18,39 @@ const db = mysql.createPool({
     user: process.env.DB_USER,
     password: process.env.DB_PASSWORD,
     database: process.env.DB_NAME,
-    port: Number(process.env.DB_PORT),
+    port: Number(process.env.DB_PORT) || 3306,
     waitForConnections: true,
     connectionLimit: 10
 });
+
+// Check required environment settings
+if (!process.env.JWT_SECRET) {
+    console.error('JWT_SECRET is missing from the .env file.');
+    process.exit(1);
+}
+
+// JWT Authentication Middleware
+function authenticateToken(req, res, next) {
+    const authHeader = req.headers.authorization;
+    const token = authHeader && authHeader.split(' ')[1];
+
+    if (!token) {
+        return res.status(401).json({
+            message: 'Access denied. Please login.'
+        });
+    }
+
+    jwt.verify(token, process.env.JWT_SECRET, (err, user) => {
+        if (err) {
+            return res.status(403).json({
+                message: 'Invalid or expired token.'
+            });
+        }
+
+        req.user = user;
+        next();
+    });
+}
 
 // USER REGISTRATION API
 app.post('/api/register', async (req, res) => {
@@ -67,11 +97,13 @@ app.post('/api/register', async (req, res) => {
         });
     } catch (error) {
         console.error('Registration error:', error);
-        res.status(500).json({ message: 'Registration failed' });
+        res.status(500).json({
+            message: 'Registration failed'
+        });
     }
 });
 
-// USER LOGIN API
+// USER LOGIN API - Generate JWT
 app.post('/api/login', async (req, res) => {
     try {
         const { email, password } = req.body;
@@ -106,8 +138,20 @@ app.post('/api/login', async (req, res) => {
             });
         }
 
+        const token = jwt.sign(
+            {
+                id: user.id,
+                email: user.email
+            },
+            process.env.JWT_SECRET,
+            {
+                expiresIn: '1h'
+            }
+        );
+
         res.json({
             message: 'Login successful',
+            token,
             user: {
                 id: user.id,
                 name: user.name,
@@ -116,26 +160,57 @@ app.post('/api/login', async (req, res) => {
         });
     } catch (error) {
         console.error('Login error:', error);
-        res.status(500).json({ message: 'Login failed' });
+        res.status(500).json({
+            message: 'Login failed'
+        });
     }
 });
 
-// GET API - Display all blogs
-app.get('/api/blogs', async (req, res) => {
+// GET LOGGED-IN USER PROFILE
+app.get('/api/profile', authenticateToken, async (req, res) => {
+    try {
+        const [users] = await db.execute(
+            'SELECT id, name, email FROM users WHERE id = ?',
+            [req.user.id]
+        );
+
+        if (users.length === 0) {
+            return res.status(404).json({
+                message: 'User not found'
+            });
+        }
+
+        res.json({
+            message: 'Profile fetched successfully',
+            user: users[0]
+        });
+    } catch (error) {
+        console.error('Profile error:', error);
+        res.status(500).json({
+            message: 'Could not fetch profile'
+        });
+    }
+});
+
+// GET API - Display only the logged-in user's blogs
+app.get('/api/blogs', authenticateToken, async (req, res) => {
     try {
         const [blogs] = await db.execute(
-            'SELECT * FROM blogs ORDER BY id DESC'
+            'SELECT * FROM blogs WHERE user_id = ? ORDER BY id DESC',
+            [req.user.id]
         );
 
         res.json(blogs);
     } catch (error) {
         console.error('View blogs error:', error);
-        res.status(500).json({ message: 'Could not fetch blogs' });
+        res.status(500).json({
+            message: 'Could not fetch blogs'
+        });
     }
 });
 
-// POST API - Create a new blog
-app.post('/api/blogs', async (req, res) => {
+// POST API - Create a blog for the logged-in user
+app.post('/api/blogs', authenticateToken, async (req, res) => {
     try {
         const { title, content } = req.body;
 
@@ -146,14 +221,15 @@ app.post('/api/blogs', async (req, res) => {
         }
 
         const [result] = await db.execute(
-            'INSERT INTO blogs (title, content) VALUES (?, ?)',
-            [title, content]
+            'INSERT INTO blogs (title, content, user_id) VALUES (?, ?, ?)',
+            [title, content, req.user.id]
         );
 
         const newBlog = {
             id: result.insertId,
             title,
-            content
+            content,
+            user_id: req.user.id
         };
 
         res.status(201).json({
@@ -162,18 +238,22 @@ app.post('/api/blogs', async (req, res) => {
         });
     } catch (error) {
         console.error('Create blog error:', error);
-        res.status(500).json({ message: 'Could not create blog' });
+        res.status(500).json({
+            message: 'Could not create blog'
+        });
     }
 });
 
-// PUT API - Update a blog
-app.put('/api/blogs/:id', async (req, res) => {
+// PUT API - Update only the logged-in user's blog
+app.put('/api/blogs/:id', authenticateToken, async (req, res) => {
     try {
         const id = Number(req.params.id);
         const { title, content } = req.body;
 
         if (!Number.isInteger(id) || id <= 0) {
-            return res.status(400).json({ message: 'Invalid blog ID' });
+            return res.status(400).json({
+                message: 'Invalid blog ID'
+            });
         }
 
         if (title === undefined && content === undefined) {
@@ -182,47 +262,56 @@ app.put('/api/blogs/:id', async (req, res) => {
             });
         }
 
-        const [result] = await db.execute(
-            `UPDATE blogs
-             SET title = COALESCE(?, title),
-                 content = COALESCE(?, content)
-             WHERE id = ?`,
-            [title ?? null, content ?? null, id]
+        const [existingBlogs] = await db.execute(
+            'SELECT id FROM blogs WHERE id = ? AND user_id = ?',
+            [id, req.user.id]
         );
 
-        if (result.affectedRows === 0) {
+        if (existingBlogs.length === 0) {
             return res.status(404).json({
                 message: 'Blog not found'
             });
         }
 
-        const [blogs] = await db.execute(
-            'SELECT * FROM blogs WHERE id = ?',
-            [id]
+        await db.execute(
+            `UPDATE blogs
+             SET title = COALESCE(?, title),
+                 content = COALESCE(?, content)
+             WHERE id = ? AND user_id = ?`,
+            [title ?? null, content ?? null, id, req.user.id]
+        );
+
+        const [updatedBlogs] = await db.execute(
+            'SELECT * FROM blogs WHERE id = ? AND user_id = ?',
+            [id, req.user.id]
         );
 
         res.json({
             message: 'Blog updated successfully',
-            blog: blogs[0]
+            blog: updatedBlogs[0]
         });
     } catch (error) {
         console.error('Update blog error:', error);
-        res.status(500).json({ message: 'Could not update blog' });
+        res.status(500).json({
+            message: 'Could not update blog'
+        });
     }
 });
 
-// DELETE API - Delete a blog
-app.delete('/api/blogs/:id', async (req, res) => {
+// DELETE API - Delete only the logged-in user's blog
+app.delete('/api/blogs/:id', authenticateToken, async (req, res) => {
     try {
         const id = Number(req.params.id);
 
         if (!Number.isInteger(id) || id <= 0) {
-            return res.status(400).json({ message: 'Invalid blog ID' });
+            return res.status(400).json({
+                message: 'Invalid blog ID'
+            });
         }
 
         const [result] = await db.execute(
-            'DELETE FROM blogs WHERE id = ?',
-            [id]
+            'DELETE FROM blogs WHERE id = ? AND user_id = ?',
+            [id, req.user.id]
         );
 
         if (result.affectedRows === 0) {
@@ -236,7 +325,9 @@ app.delete('/api/blogs/:id', async (req, res) => {
         });
     } catch (error) {
         console.error('Delete blog error:', error);
-        res.status(500).json({ message: 'Could not delete blog' });
+        res.status(500).json({
+            message: 'Could not delete blog'
+        });
     }
 });
 
@@ -244,16 +335,19 @@ app.delete('/api/blogs/:id', async (req, res) => {
 async function startServer() {
     try {
         const connection = await db.getConnection();
+
         console.log('MySQL database connected successfully!');
+
         connection.release();
 
-        const PORT = 5000;
+        const PORT = process.env.PORT || 5000;
 
         app.listen(PORT, () => {
             console.log(`Server running at http://localhost:${PORT}`);
         });
     } catch (error) {
         console.error('MySQL connection failed:', error.message);
+        process.exit(1);
     }
 }
 
