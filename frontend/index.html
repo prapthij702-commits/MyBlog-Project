@@ -167,7 +167,8 @@
 
 <script>
 
-const API = "http://localhost:5000/api";
+// LIVE BACKEND API URL
+const API = "https://myblog-project-xdix.onrender.com/api";
 
 // Show messages
 function showMessage(message) {
@@ -189,6 +190,7 @@ function authHeaders() {
 
 // Handle expired or invalid token
 function handleUnauthorized() {
+
     localStorage.removeItem("token");
     localStorage.removeItem("user");
 
@@ -635,7 +637,7 @@ async function checkLogin() {
 
     } catch (error) {
 
-        showMessage("Cannot connect to backend. Please start the server.");
+        showMessage("Cannot connect to backend. Please try again.");
 
     }
 }
