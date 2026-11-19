@@ -6,26 +6,36 @@ const cors = require('cors');
 const bcrypt = require('bcryptjs');
 const mysql = require('mysql2/promise');
 const jwt = require('jsonwebtoken');
+const fs = require('fs');
+const path = require('path');
 
 const app = express();
 
 app.use(cors());
 app.use(express.json());
 
-// MySQL database connection
+// TiDB Cloud MySQL database connection
 const db = mysql.createPool({
     host: process.env.DB_HOST,
     user: process.env.DB_USER,
     password: process.env.DB_PASSWORD,
     database: process.env.DB_NAME,
-    port: Number(process.env.DB_PORT) || 3306,
+    port: Number(process.env.DB_PORT) || 4000,
+
+    ssl: {
+        ca: fs.readFileSync(
+            path.join(__dirname, 'ca.pem')
+        )
+    },
+
     waitForConnections: true,
-    connectionLimit: 10
+    connectionLimit: 10,
+    queueLimit: 0
 });
 
 // Check required environment settings
 if (!process.env.JWT_SECRET) {
-    console.error('JWT_SECRET is missing from the .env file.');
+    console.error('JWT_SECRET is missing from .env file.');
     process.exit(1);
 }
 
@@ -95,15 +105,17 @@ app.post('/api/register', async (req, res) => {
                 email
             }
         });
+
     } catch (error) {
         console.error('Registration error:', error);
+
         res.status(500).json({
             message: 'Registration failed'
         });
     }
 });
 
-// USER LOGIN API - Generate JWT
+// USER LOGIN API
 app.post('/api/login', async (req, res) => {
     try {
         const { email, password } = req.body;
@@ -158,8 +170,10 @@ app.post('/api/login', async (req, res) => {
                 email: user.email
             }
         });
+
     } catch (error) {
         console.error('Login error:', error);
+
         res.status(500).json({
             message: 'Login failed'
         });
@@ -184,15 +198,17 @@ app.get('/api/profile', authenticateToken, async (req, res) => {
             message: 'Profile fetched successfully',
             user: users[0]
         });
+
     } catch (error) {
         console.error('Profile error:', error);
+
         res.status(500).json({
             message: 'Could not fetch profile'
         });
     }
 });
 
-// GET API - Display only the logged-in user's blogs
+// GET ALL BLOGS OF LOGGED-IN USER
 app.get('/api/blogs', authenticateToken, async (req, res) => {
     try {
         const [blogs] = await db.execute(
@@ -201,15 +217,17 @@ app.get('/api/blogs', authenticateToken, async (req, res) => {
         );
 
         res.json(blogs);
+
     } catch (error) {
         console.error('View blogs error:', error);
+
         res.status(500).json({
             message: 'Could not fetch blogs'
         });
     }
 });
 
-// POST API - Create a blog for the logged-in user
+// CREATE BLOG
 app.post('/api/blogs', authenticateToken, async (req, res) => {
     try {
         const { title, content } = req.body;
@@ -225,26 +243,26 @@ app.post('/api/blogs', authenticateToken, async (req, res) => {
             [title, content, req.user.id]
         );
 
-        const newBlog = {
-            id: result.insertId,
-            title,
-            content,
-            user_id: req.user.id
-        };
-
         res.status(201).json({
             message: 'Blog created successfully',
-            blog: newBlog
+            blog: {
+                id: result.insertId,
+                title,
+                content,
+                user_id: req.user.id
+            }
         });
+
     } catch (error) {
         console.error('Create blog error:', error);
+
         res.status(500).json({
             message: 'Could not create blog'
         });
     }
 });
 
-// PUT API - Update only the logged-in user's blog
+// UPDATE BLOG
 app.put('/api/blogs/:id', authenticateToken, async (req, res) => {
     try {
         const id = Number(req.params.id);
@@ -290,15 +308,17 @@ app.put('/api/blogs/:id', authenticateToken, async (req, res) => {
             message: 'Blog updated successfully',
             blog: updatedBlogs[0]
         });
+
     } catch (error) {
         console.error('Update blog error:', error);
+
         res.status(500).json({
             message: 'Could not update blog'
         });
     }
 });
 
-// DELETE API - Delete only the logged-in user's blog
+// DELETE BLOG
 app.delete('/api/blogs/:id', authenticateToken, async (req, res) => {
     try {
         const id = Number(req.params.id);
@@ -323,30 +343,33 @@ app.delete('/api/blogs/:id', authenticateToken, async (req, res) => {
         res.json({
             message: 'Blog deleted successfully'
         });
+
     } catch (error) {
         console.error('Delete blog error:', error);
+
         res.status(500).json({
             message: 'Could not delete blog'
         });
     }
 });
 
-// Start server after checking MySQL connection
+// START SERVER AFTER CHECKING DATABASE CONNECTION
 async function startServer() {
     try {
         const connection = await db.getConnection();
 
-        console.log('MySQL database connected successfully!');
+        console.log('TiDB Cloud database connected successfully!');
 
         connection.release();
 
         const PORT = process.env.PORT || 5000;
 
         app.listen(PORT, () => {
-            console.log(`Server running at http://localhost:${PORT}`);
+            console.log(`Server running on port ${PORT}`);
         });
+
     } catch (error) {
-        console.error('MySQL connection failed:', error.message);
+        console.error('TiDB database connection failed:', error.message);
         process.exit(1);
     }
 }
